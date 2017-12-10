@@ -167,10 +167,10 @@ class PuzzleGraph():
             xi, yi = edge.origin.coord
             xf, yf = edge.twin.origin.coord
             start = ((xi-x_off)*scale_x, (yi-y_off)*scale_y)
-            end = ((xi-x_off)*scale_x, (yi-y_off)*scale_y)
+            end = ((xf-x_off)*scale_x, (yf-y_off)*scale_y)
             col = (20, 20, 20)
             thick = 3
-            pygame.draw.line(surf, col, start, end, 3)
+            pygame.draw.line(surf, col, start, end, 5)
 
 def make_test_graph():
     graph = PuzzleGraph()
