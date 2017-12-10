@@ -1,4 +1,4 @@
-#!/usr/bin/env
+#!/usr/bin/env python3
 
 import pygame
 from pygame import *
@@ -6,7 +6,6 @@ from pygame import *
 import math
 import random
 import numpy as np
-PI = math.pi
 
 def softmax(x):
     e_x = np.exp(x-np.max(x))
@@ -28,8 +27,17 @@ class PuzzleNode():
         self.is_start = False
         self.is_end = False"""
 
+# Puzzle nodes are stored as the payloads of the below defined DCEL Vertex
+class PuzzleNode():
+    def __init__(self):
+        self.puzzle_node = None
+        self.is_start = False
+        self.is_end = False
+        self.token = None # sometimes there is a special dot on vertices, could be colored
+
+# DCEL objects
 class HalfEdge:
-    def __init__(self, origin, twin, incident_face):
+    def __init__(self, origin):
         """
             origin: the origin Vertex
             twin: the HalfEdge on the 'right' side that completes the edge
@@ -37,22 +45,30 @@ class HalfEdge:
         """
         self.origin = origin
         # twin is the edge on the other side of the incident_face
-        self.twin = twin
+        self.twin = None
 
         # the 'inner' face / the face to this half edge's left
         # (h-edges go counter clockwise around face)
-        self.incident_face = incident_face
+        self.incident_face = None
         # incident_face can be None along edge
-        
         # next half-edge starts at twin.origin, continues ctr-clockwise to next vert
         self.next = None
         # some implemenetations only store a next
         self.prev = None
+        
+        # FOR WITNESS SIM
         # to allow the puzzle graph to have stray edges
         # a degenerate will have the same face on either side
         # i.e. incident_face = twin.incident_face
         self.is_degenerate = False
-        
+        # can player go through this edge
+        self.is_passable = True
+    def set_twin(self, twin):
+        self.twin = twin
+        # it goes both ways!
+        twin.twin = self
+    def set_incident_face(self, face):
+        self.incident_face = face
     def set_next(self, half_edge):
         self.next = half_edge
     def set_prev(self, half_edge):
@@ -61,28 +77,41 @@ class HalfEdge:
         return self.twin.origin
         
 class Vertex:
-    def __init__(self, coord, puzzle_node):
+    def __init__(self, coord):
         """
             coord: a tuple (x, y)
         """
         self.coord = coord
         # half edge which has this vertex as its origin
         self.incident_edge = None
+
+        
+        # TO STORE DATA FOR THE WITNESS
+        self.puzzle_node = None
+        
     def set_incident_edge(self, edge):
         self.incident_edge = edge
+    def get_puzzle_node(self):
+        return self.puzzle_node
+    def set_puzzle_node(self, node):
+        self.puzzle_node = node
+
 
 class Face:
-    def __init__(self, face, some_half_edge):
+    def __init__(self, some_half_edge = None):
         # can be any one of the half-edges that form the face
+        self.incident_edge = some_half_edge
+        self.color = None
+    def set_incident_edge(some_half_edge):
         self.incident_edge = some_half_edge
         
 # based on a "double connected edge list"
 class PuzzleGraph():
     # we're all just made of half edges, in the end
-    def __init__(self):
-        self.half_edges = []
-        self.vertices = []
-        self.faces = []
+    def __init__(self, vertices = [], half_edges = [], faces = []):
+        self.half_edges = half_edges
+        self.vertices = vertices
+        self.faces = faces
         self.valid_bounds = False
         self._bounds = None
     def get_bounding_rect(self):
@@ -90,7 +119,7 @@ class PuzzleGraph():
             return self._bounds
         min_x, max_x = None, None
         min_y, max_y = None, None
-        for v in vertices:
+        for v in self.vertices:
             x, y = v.coord
             if min_x is None or x < min_x:
                 min_x = x
@@ -105,10 +134,105 @@ class PuzzleGraph():
         return (min_x, min_y, w, h)
     
     def draw_to_fit(self, surf):
-        start_x, start_y, gw, gh = self.get_bounding_rect()
+        x_off, y_off, gw, gh = self.get_bounding_rect()
         sw, sh = surf.get_size()
-        # iterate through the
-        
+        # source is graph, dest is surf
+        scale_x = float(sw) / gw
+        scale_y = float(sh) / gh
+        # draw faces
+        for f_i, face in enumerate(self.faces):
+            # get all the points of the face
+            start_edge = face.incident_edge
+            next_edge = start_edge.next
+            coords = [start_edge.origin.coord]
+            while next_edge is not None and next_edge is not start_edge:
+                coords.append(next_edge.origin.coord)
+                next_edge = next_edge.next
+            # transform to surface dimensions
+            pts = [ ((x-x_off)*scale_x, (y-y_off)*scale_y)
+                    for x,y in coords ]
+            
+            if face.color is not None:
+                col = face.color
+            else:
+                col = tuple([random.randint(0,255) for i in range(3)])
+            # draw a poly
+            if len(pts) > 2:
+                pygame.draw.polygon(surf, col, pts)
+            else:
+                print("GRAPH ERROR AROUND FACE #%s!"%f_i)
+                print(pts)
+        # draw edges
+        for edge in self.half_edges:
+            xi, yi = edge.origin.coord
+            xf, yf = edge.twin.origin.coord
+            start = ((xi-x_off)*scale_x, (yi-y_off)*scale_y)
+            end = ((xi-x_off)*scale_x, (yi-y_off)*scale_y)
+            col = (20, 20, 20)
+            thick = 3
+            pygame.draw.line(surf, col, start, end, 3)
+
+def make_test_graph():
+    graph = PuzzleGraph()
+    # this example shows that DCELs are kind of a pain to build by hand
+    # create a connected grid...
+    # first make a temp 2d array of vertices
+    w, h = 6, 7
+    random_offset = lambda: -.3+random.random()*0.6
+    vert_arr = [[Vertex((x+random_offset(),y+random_offset()))
+                 for y in range(h)] for x in range(w)]
+    # use temp lists to help with all the linking during DCEL construction
+    down_edges = [[None for y in range(h-1)] for x in range(w)]
+    right_edges = [[None for y in range(h)] for x in range(w-1)]
+    faces = []
+    # make edges to right and below each vert (making 4 half-edges each y loop-iteration)
+    for x in range(w):
+        for y in range(h):
+            vert = vert_arr[x][y]
+            vert.set_puzzle_node(PuzzleNode())
+            if x < w-1:
+                right_v = vert_arr[x+1][y]
+                right_edge = HalfEdge(vert)
+                right_twin = HalfEdge(right_v)
+                right_edge.set_twin(right_twin)
+                right_edges[x][y] = right_edge
+            if y < h-1:
+                down_v = vert_arr[x][y+1]
+                down_edge = HalfEdge(vert)
+                down_twin = HalfEdge(down_v)
+                down_edge.set_twin(down_twin)
+                down_edges[x][y] = down_edge
+            if x < w - 1 and y < h - 1:
+                face = Face(down_edge)
+                face.color = (x*(200//w),40,y*(230//h))
+                faces.append(face)
+            if x > 0 and y > 0:
+                # connection time
+                # top edge - next
+                top = right_edges[x-1][y-1].twin
+                down = down_edges[x-1][y-1]
+                top.next = down
+                down.prev = top
+                # down edge - next
+                right = right_edges[x-1][y]
+                down.next = right
+                right.prev = down
+                # right edge - next
+                up = down_edges[x][y-1].twin
+                right.next = up
+                up.prev = right
+                # up edge - next
+                up.next = top
+                top.prev = up
+                
+                #print([top, down, right, up])
+    # flatten 2d array
+    vert_arr = sum(vert_arr, [])
+    # merge edges
+    edges = sum(down_edges,[]) + sum(right_edges, [])
+    graph = PuzzleGraph(vert_arr, edges, faces)
+    return graph
+
 # base class for different kinds of puzzles
 class Puzzle():
     def __init__(self, grid_size):
@@ -184,7 +308,7 @@ class PuzzleFactory():
             try_count = 10
             # try try_count times to place the target amount of cells before trying new settings instead
             while try_count > 0 and not satisfied:
-                # place cells
+                # place cellse
                 
                 # is it solvable?
                 if solvable:
@@ -194,8 +318,14 @@ class PuzzleFactory():
 def main():
     pygame.init()
     screen = pygame.display.set_mode((600,600))
-    screen.fill((0,0,0))
+    screen.fill((250,250,250))
     running = True
+    test_graph = make_test_graph()
+    puzzle_surf = pygame.Surface((400,400))
+    puzzle_surf.fill((155,155,155))
+    test_graph.draw_to_fit(puzzle_surf)
+    screen.blit(puzzle_surf, (100,100))
+    pygame.display.update()
     while running:
         for e in pygame.event.get():
             if e.type == QUIT:
@@ -203,8 +333,7 @@ def main():
             elif e.type == KEYDOWN:
                 if e.key == K_ESCAPE:
                     running = False
-        screen.fill((0,0,0))
-        
+        #screen.fill((0,0,0))    
         #pygame.display.update()
     pygame.quit()
 if __name__ == "__main__":
