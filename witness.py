@@ -51,8 +51,8 @@ class PuzzleToken:
         self.properties = properties
     def draw(self, surf, pos, rad):
         t = self.type
-        if t == COLOR_BLOCK:
-            col = properties[PROP_COLOR]
+        if t == PuzzleToken.COLOR_BLOCK:
+            col = self.properties[PuzzleToken.PROP_COLOR]
             x,y = pos
             rect = (x-rad,y-rad,rad*2,rad*2)
             pygame.draw.rect(surf, col, rect)
@@ -150,7 +150,7 @@ class Face:
     def set_incident_edge(self, some_half_edge):
         self.incident_edge = some_half_edge
     def get_token(self):
-        return token
+        return self.token
     def set_token(self, token):
         self.token = token
 # based on a "double connected edge list"
@@ -209,6 +209,7 @@ class PuzzleGraph():
                 pygame.draw.polygon(surf, col, pts)
                 # draw the token, too
                 if face.token is not None:
+                    print("Token Time!")
                     face.token.draw(surf, avg_point(pts), 10)
             else:
                 print("GRAPH ERROR AROUND FACE #%s!"%f_i)
