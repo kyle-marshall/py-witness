@@ -11,15 +11,62 @@ def softmax(x):
     e_x = np.exp(x-np.max(x))
     return e_x / e_x.sum()
 
+def avg_point(point_list):
+    x_sum = sum([x for x,y in point_list])
+    y_sum = sum([y for x,y in point_list])
+    n = len(point_list)
+    return (x_sum / n, y_sum / n)
+
 class Poly:
     def __init__(self, points):
         self.points = points
         
-
-class PuzzleToken:
-    # the symbols that clue to how the puzzles work
+class Colors:
+    RED = (255, 0, 0)
+    ORANGE = (255, 180, 0)
+    YELLOW = (255, 255, 0)
+    GREEN = (0, 255, 0)
+    BLUE = (0, 0, 255)
+    BLACK = (0,0,0)
+    WHITE = (255,255,255)
     def __init__(self):
         pass
+        
+class PuzzleToken:
+    # types
+    COLOR_BLOCK = 0 # for the black-white or multi-color seperation puzzles
+    FIXED_SHAPE = 1 # tetris-like pieces that can't be rotated
+    FREE_SHAPE = 2 # "  "  "  that can be rotated
+    FIXED_NEG_SHAPE = 3 # the blue subtraction shapes
+    FREE_NEG_SHAPE = 4 # " 
+    COLOR_STAR = 3 #  they must come in twos
+
+    # custom property name constants
+    PROP_COLOR = "color"
+    PROP_SHAPE = "shape"
+    
+    # the symbols that clue to how the puzzles work
+    def __init__(self, token_type, properties = {}):
+        self.type = token_type
+        self.properties = properties
+    def draw(self, surf, pos, rad):
+        t = self.type
+        if t == COLOR_BLOCK:
+            col = properties[PROP_COLOR]
+            x,y = pos
+            rect = (x-rad,y-rad,rad*2,rad*2)
+            pygame.draw.rect(surf, col, rect)
+        # TODO: draw other types
+
+class TokenFactory:
+    def __init__(self):
+        pass
+    @classmethod
+    def make_color_block_token(self, color):
+        col_key = PuzzleToken.PROP_COLOR
+        t = PuzzleToken.COLOR_BLOCK
+        return PuzzleToken(t, { col_key : color } )
+
 """
 class PuzzleNode():
     def __init__(self):0
@@ -99,9 +146,13 @@ class Face:
         # can be any one of the half-edges that form the face
         self.incident_edge = some_half_edge
         self.color = None
-    def set_incident_edge(some_half_edge):
+        self.token = None
+    def set_incident_edge(self, some_half_edge):
         self.incident_edge = some_half_edge
-        
+    def get_token(self):
+        return token
+    def set_token(self, token):
+        self.token = token
 # based on a "double connected edge list"
 class PuzzleGraph():
     # we're all just made of half edges, in the end
@@ -156,6 +207,9 @@ class PuzzleGraph():
             # draw a poly
             if len(pts) > 2:
                 pygame.draw.polygon(surf, col, pts)
+                # draw the token, too
+                if face.token is not None:
+                    face.token.draw(surf, avg_point(pts), 10)
             else:
                 print("GRAPH ERROR AROUND FACE #%s!"%f_i)
                 print(pts)
@@ -207,6 +261,10 @@ def make_test_graph():
                 down_edges[x][y] = down_edge
             if x < w - 1 and y < h - 1:
                 face = Face(down_edge)
+                if(random.randint(0,10) == 0):
+                    t_col = Colors.BLACK if random.randint(0,1) == 0 else Colors.WHITE
+                    face.set_token(TokenFactory.make_color_block_token(t_col))
+                    
                 face.color = (x*(200//w),40,y*(230//h))
                 faces.append(face)
             if x > 0 and y > 0:
