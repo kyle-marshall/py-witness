@@ -182,7 +182,12 @@ class PuzzleGraph():
         return (min_x, min_y, w, h)
     
     def draw_to_fit(self, surf):
+        pad = 0.2
         x_off, y_off, gw, gh = self.get_bounding_rect()
+        x_off -= pad
+        y_off -= pad
+        gw += 2*pad
+        gh += 2*pad
         sw, sh = surf.get_size()
         # source is graph, dest is surf
         scale_x = float(sw) / gw
@@ -233,10 +238,10 @@ class PuzzleGraph():
 def make_test_graph():
     graph = PuzzleGraph()
     # this example shows that DCELs are kind of a pain to build by hand
+    # BLACK WHITE PUZZLE
     # create a connected grid...
-    # first make a temp 2d array of vertices
     w, h = 6, 7
-    random_offset = lambda: -.3+random.random()*0.6
+    random_offset = lambda: -.1+random.random()*0.2
     vert_arr = [[Vertex((x+random_offset(),y+random_offset()))
                  for y in range(h)] for x in range(w)]
     # use temp lists to help with all the linking during DCEL construction
@@ -262,6 +267,7 @@ def make_test_graph():
                 down_edges[x][y] = down_edge
             if x < w - 1 and y < h - 1:
                 face = Face(down_edge)
+                # 1 in 10 chance to make a random black-white token
                 if(random.randint(0,10) == 0):
                     t_col = Colors.BLACK if random.randint(0,1) == 0 else Colors.WHITE
                     face.set_token(TokenFactory.make_color_block_token(t_col))
@@ -288,14 +294,30 @@ def make_test_graph():
                 top.prev = up
                 
                 #print([top, down, right, up])
+    # make a puzzle exit
+    corner_vert = vert_arr[w-1][h-1]
+    cx,cy = corner_vert.coord
+    exit_pos = (cx+0.2, cy)
+    exit_vert = Vertex(exit_pos)
+    exit_node = PuzzleNode()
+    exit_node.is_exit = True
+    exit_vert.set_puzzle_node(exit_node)
+    to_exit = HalfEdge(corner_vert)
+    to_corner = HalfEdge(exit_vert)
+    to_exit.set_twin(to_corner)
+    
     # flatten 2d array
     vert_arr = sum(vert_arr, [])
+    vert_arr.append(exit_vert)
+    
     for v in vert_arr:
         v.set_puzzle_node(PuzzleNode())
         if random.randint(0,w) == 0:
             v.puzzle_node.is_start = True
     # merge edges
     edges = sum(down_edges,[]) + sum(right_edges, [])
+    edges += [to_exit, to_corner]
+
     graph = PuzzleGraph(vert_arr, edges, faces)
     return graph
 
