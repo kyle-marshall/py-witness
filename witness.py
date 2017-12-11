@@ -57,9 +57,6 @@ class HalfEdge:
         self.prev = None
         
         # FOR WITNESS SIM
-        # to allow the puzzle graph to have stray edges
-        # a degenerate will have the same face on either side
-        # i.e. incident_face = twin.incident_face
         self.is_degenerate = False
         # can player go through this edge
         self.is_passable = True
@@ -171,6 +168,12 @@ class PuzzleGraph():
             col = (20, 20, 20)
             thick = 3
             pygame.draw.line(surf, col, start, end, 5)
+        for v in self.vertices:
+            x,y = v.coord
+            pt = (int((x-x_off)*scale_x), int((y-y_off)*scale_y))
+            if v.puzzle_node is not None:
+                if v.puzzle_node.is_start:
+                    pygame.draw.circle(surf, col, pt, 10) 
 
 def make_test_graph():
     graph = PuzzleGraph()
@@ -228,12 +231,17 @@ def make_test_graph():
                 #print([top, down, right, up])
     # flatten 2d array
     vert_arr = sum(vert_arr, [])
+    for v in vert_arr:
+        v.set_puzzle_node(PuzzleNode())
+        if random.randint(0,w) == 0:
+            v.puzzle_node.is_start = True
     # merge edges
     edges = sum(down_edges,[]) + sum(right_edges, [])
     graph = PuzzleGraph(vert_arr, edges, faces)
     return graph
 
 # base class for different kinds of puzzles
+# old: I made this when I thought it was still going to be purely a grid
 class Puzzle():
     def __init__(self, grid_size):
         self.grid_size = grid_size;
@@ -321,10 +329,10 @@ def main():
     screen.fill((250,250,250))
     running = True
     test_graph = make_test_graph()
-    puzzle_surf = pygame.Surface((400,400))
+    puzzle_surf = pygame.Surface((500,500))
     puzzle_surf.fill((155,155,155))
     test_graph.draw_to_fit(puzzle_surf)
-    screen.blit(puzzle_surf, (100,100))
+    screen.blit(puzzle_surf, (50,50))
     pygame.display.update()
     while running:
         for e in pygame.event.get():
